@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../constants/strings.dart';
+
 class BuildNextButton extends StatelessWidget {
   const BuildNextButton({super.key});
 
@@ -8,7 +10,9 @@ class BuildNextButton extends StatelessWidget {
     return Align(
       alignment: Alignment.centerRight,
       child: ElevatedButton(
-        onPressed: (){},
+        onPressed: (){
+          Navigator.pushNamed(context, otpScreen);
+        },
         style: ElevatedButton.styleFrom(
           minimumSize:const Size(110, 50),
         backgroundColor: Colors.black,
