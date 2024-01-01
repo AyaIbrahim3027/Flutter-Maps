@@ -1,14 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_maps/business_logic/cubit/maps/maps_cubit.dart';
 import 'package:flutter_maps/business_logic/cubit/phone_auth/phone_auth_cubit.dart';
 import 'package:flutter_maps/constants/colors.dart';
+import 'package:flutter_maps/data/models/place_suggestion.dart';
 import 'package:flutter_maps/helpers/location_helper.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:material_floating_search_bar_2/material_floating_search_bar_2.dart';
+import 'package:uuid/uuid.dart';
 
 import '../widgets/my_drawer.dart';
+import '../widgets/place_item.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -24,6 +29,8 @@ class _MapScreenState extends State<MapScreen> {
   Completer<GoogleMapController> _mapController = Completer();
 
   FloatingSearchBarController controller = FloatingSearchBarController();
+
+  List<PlaceSuggestion> places = [];
 
   static final CameraPosition _myCurrentLocationCameraPosition = CameraPosition(
     bearing: 0,
@@ -91,7 +98,9 @@ class _MapScreenState extends State<MapScreen> {
       openAxisAlignment: 0,
       width: isPortrait ? 600 : 500,
       debounceDelay: const Duration(milliseconds: 500),
-      onQueryChanged: (query) {},
+      onQueryChanged: (query) {
+        getPlacesSuggestions(query);
+      },
       onFocusChanged: (_) {},
       transition: CircularFloatingSearchBarTransition(),
       actions: [
@@ -109,10 +118,12 @@ class _MapScreenState extends State<MapScreen> {
       builder: (context, transition) {
         return ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: const Column(
+          child:  Column(
             mainAxisAlignment: MainAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
-            children: [],
+            children: [
+               buildSuggestionsBloc(),
+            ],
           ),
         );
       },
@@ -145,5 +156,40 @@ class _MapScreenState extends State<MapScreen> {
     final GoogleMapController controller = await _mapController.future;
     controller.animateCamera(
         CameraUpdate.newCameraPosition(_myCurrentLocationCameraPosition));
+  }
+
+  Widget buildSuggestionsBloc() {
+    return BlocBuilder<MapsCubit,MapsState>(builder: (context, state){
+      if(state is PlacesLoaded){
+        places = (state).places;
+        if(places.length != 0){
+          return buildPlacesList();
+        } else{
+          return Container();
+        }
+      } else{
+        return Container();
+      }
+    });
+  }
+
+  Widget buildPlacesList() {
+    return ListView.builder(
+      itemCount: places.length,
+        shrinkWrap: true,
+        physics: ClampingScrollPhysics(),
+        itemBuilder: (context,index){
+          return InkWell(
+            onTap: (){
+              controller.close();
+            },
+            child: PlaceItem(suggestion: places[index]),
+          );
+        });
+  }
+
+  void getPlacesSuggestions(String query) {
+    final sessionToken = Uuid().v4();
+    BlocProvider.of<MapsCubit>(context).emitPlaceSuggestions(query, sessionToken);
   }
 }

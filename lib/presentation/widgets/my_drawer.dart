@@ -20,7 +20,7 @@ class _MyDrawerState extends State<MyDrawer> {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          Container(
+          SizedBox(
             height: 210,
             child: DrawerHeader(
               decoration: BoxDecoration(
@@ -68,11 +68,14 @@ class _MyDrawerState extends State<MyDrawer> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        const Text(
-          'Phone Number',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+        BlocProvider<PhoneAuthCubit>(
+          create: (context) => phoneAuthCubit,
+          child: Text(
+            '${phoneAuthCubit.getLoggedInUser().phoneNumber}',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ],
@@ -109,7 +112,7 @@ class _MyDrawerState extends State<MyDrawer> {
     );
   }
 
-  Widget buildLogoutBlocProvider(){
+  Widget buildLogoutBlocProvider() {
     return BlocProvider<PhoneAuthCubit>(
       create: (context) => phoneAuthCubit,
       child: buildDrawerListItem(
@@ -120,7 +123,7 @@ class _MyDrawerState extends State<MyDrawer> {
           Navigator.of(context).pushReplacementNamed(loginScreen);
         },
         color: Colors.red,
-        trailing: SizedBox(),
+        trailing: const SizedBox(),
       ),
     );
   }
