@@ -6,17 +6,17 @@ abstract class MapsState {}
 class MapsInitial extends MapsState {}
 
 class PlacesLoaded extends MapsState {
-  final List<PlaceSuggestion> places;
+  final List<PlaceSuggestionModel> places;
 
   PlacesLoaded(this.places);
 }
 
-// class PlaceLocationLoaded extends MapsState {
-//   final Place place;
-//
-//   PlaceLocationLoaded(this.place);
-// }
-//
+class PlaceLocationLoaded extends MapsState {
+  final PlaceModel place;
+
+  PlaceLocationLoaded(this.place);
+}
+
 // class DirectionsLoaded extends MapsState {
 //   final PlaceDirections placeDirections;
 //

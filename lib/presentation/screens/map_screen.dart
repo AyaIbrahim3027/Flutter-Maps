@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_maps/business_logic/cubit/maps/maps_cubit.dart';
-import 'package:flutter_maps/business_logic/cubit/phone_auth/phone_auth_cubit.dart';
 import 'package:flutter_maps/constants/colors.dart';
+import 'package:flutter_maps/data/models/place.dart';
 import 'package:flutter_maps/data/models/place_suggestion.dart';
 import 'package:flutter_maps/helpers/location_helper.dart';
 import 'package:geolocator/geolocator.dart';
@@ -23,14 +23,12 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  PhoneAuthCubit phoneAuthCubit = PhoneAuthCubit();
-
   static Position? position;
   Completer<GoogleMapController> _mapController = Completer();
 
   FloatingSearchBarController controller = FloatingSearchBarController();
 
-  List<PlaceSuggestion> places = [];
+  List<PlaceSuggestionModel> places = [];
 
   static final CameraPosition _myCurrentLocationCameraPosition = CameraPosition(
     bearing: 0,
@@ -38,6 +36,26 @@ class _MapScreenState extends State<MapScreen> {
     tilt: 0,
     zoom: 17,
   );
+
+  // these variables for getPlaceLocation
+  Set<Marker> markers = Set();
+  late PlaceSuggestionModel placeSuggestion;
+  late PlaceModel selectedPlace;
+  late Marker searchedPlaceMarker;
+  late Marker currentLocationMarker;
+  late CameraPosition goToSearchedForPlace;
+
+  void buildCameraNewPosition() {
+    goToSearchedForPlace = CameraPosition(
+      bearing: 0.0,
+      tilt: 0.0,
+      target: LatLng(
+        selectedPlace.result.geometry.location.lat,
+        selectedPlace.result.geometry.location.lng,
+      ),
+      zoom: 13,
+    );
+  }
 
   @override
   void initState() {
@@ -118,11 +136,12 @@ class _MapScreenState extends State<MapScreen> {
       builder: (context, transition) {
         return ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child:  Column(
+          child: Column(
             mainAxisAlignment: MainAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-               buildSuggestionsBloc(),
+              buildSuggestionsBloc(),
+              buildSelectedPlaceLocationBloc(),
             ],
           ),
         );
@@ -145,6 +164,7 @@ class _MapScreenState extends State<MapScreen> {
       myLocationEnabled: true,
       zoomControlsEnabled: false,
       myLocationButtonEnabled: false,
+      markers: markers,
       initialCameraPosition: _myCurrentLocationCameraPosition,
       onMapCreated: (GoogleMapController controller) {
         _mapController.complete(controller);
@@ -159,15 +179,15 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget buildSuggestionsBloc() {
-    return BlocBuilder<MapsCubit,MapsState>(builder: (context, state){
-      if(state is PlacesLoaded){
+    return BlocBuilder<MapsCubit, MapsState>(builder: (context, state) {
+      if (state is PlacesLoaded) {
         places = (state).places;
-        if(places.length != 0){
+        if (places.length != 0) {
           return buildPlacesList();
-        } else{
+        } else {
           return Container();
         }
-      } else{
+      } else {
         return Container();
       }
     });
@@ -175,13 +195,15 @@ class _MapScreenState extends State<MapScreen> {
 
   Widget buildPlacesList() {
     return ListView.builder(
-      itemCount: places.length,
+        itemCount: places.length,
         shrinkWrap: true,
-        physics: ClampingScrollPhysics(),
-        itemBuilder: (context,index){
+        physics: const ClampingScrollPhysics(),
+        itemBuilder: (context, index) {
           return InkWell(
-            onTap: (){
+            onTap: () async {
+              placeSuggestion = places[index];
               controller.close();
+              getSelectedPlaceLocation();
             },
             child: PlaceItem(suggestion: places[index]),
           );
@@ -190,6 +212,68 @@ class _MapScreenState extends State<MapScreen> {
 
   void getPlacesSuggestions(String query) {
     final sessionToken = Uuid().v4();
-    BlocProvider.of<MapsCubit>(context).emitPlaceSuggestions(query, sessionToken);
+    BlocProvider.of<MapsCubit>(context)
+        .emitPlaceSuggestions(query, sessionToken);
+  }
+
+  void getSelectedPlaceLocation() {
+    final sessionToken = const Uuid().v4();
+    BlocProvider.of<MapsCubit>(context)
+        .emitPlaceLocation(placeSuggestion.placeId, sessionToken);
+  }
+
+  Widget buildSelectedPlaceLocationBloc() {
+    return BlocListener<MapsCubit, MapsState>(
+      listener: (context, state) {
+        if (state is PlaceLocationLoaded) {
+          selectedPlace = (state).place;
+
+          goToMySearchedForLocation();
+        }
+      },
+      child: Container(),
+    );
+  }
+
+  Future<void> goToMySearchedForLocation() async {
+    buildCameraNewPosition();
+    final GoogleMapController controller = await _mapController.future;
+    controller
+        .animateCamera(CameraUpdate.newCameraPosition(goToSearchedForPlace));
+    buildSearchedPlaceMarker();
+  }
+
+  void buildSearchedPlaceMarker() {
+    searchedPlaceMarker = Marker(
+      markerId: const MarkerId('1'),
+      position: goToSearchedForPlace.target,
+      onTap: () {
+        buildCurrentLocationMarker();
+      },
+      infoWindow: InfoWindow(
+        title: '${placeSuggestion.description}',
+      ),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+    );
+    addMarkerToMarkersAndUpdateUI(searchedPlaceMarker);
+  }
+
+  void buildCurrentLocationMarker() {
+    currentLocationMarker = Marker(
+      markerId: const MarkerId('2'),
+      position: LatLng(position!.latitude, position!.longitude),
+      onTap: () {},
+      infoWindow: const InfoWindow(
+        title: 'Your Current Location',
+      ),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+    );
+    addMarkerToMarkersAndUpdateUI(currentLocationMarker);
+  }
+
+  void addMarkerToMarkersAndUpdateUI(Marker marker) {
+    setState(() {
+      markers.add(marker);
+    });
   }
 }

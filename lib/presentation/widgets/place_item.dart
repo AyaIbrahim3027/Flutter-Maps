@@ -5,7 +5,7 @@ import 'package:flutter_maps/data/models/place_suggestion.dart';
 class PlaceItem extends StatelessWidget {
   const PlaceItem({super.key, required this.suggestion});
 
-  final PlaceSuggestion suggestion;
+  final PlaceSuggestionModel suggestion;
 
   @override
   Widget build(BuildContext context) {
