@@ -5,8 +5,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_maps/business_logic/cubit/maps/maps_cubit.dart';
 import 'package:flutter_maps/constants/colors.dart';
 import 'package:flutter_maps/data/models/place.dart';
+import 'package:flutter_maps/data/models/place_directions.dart';
 import 'package:flutter_maps/data/models/place_suggestion.dart';
 import 'package:flutter_maps/helpers/location_helper.dart';
+import 'package:flutter_maps/presentation/widgets/distance_and_time.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:material_floating_search_bar_2/material_floating_search_bar_2.dart';
@@ -24,7 +26,7 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   static Position? position;
-  Completer<GoogleMapController> _mapController = Completer();
+  final Completer<GoogleMapController> _mapController = Completer();
 
   FloatingSearchBarController controller = FloatingSearchBarController();
 
@@ -57,6 +59,15 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  // these variables for getDirections
+  PlaceDirectionsModel? placeDirections;
+  var progressIndicator = false;
+  late List<LatLng> polylinePoints;
+  var isSearchedPlaceMarkerClicked = false;
+  var isTimeAndDistanceVisible = false;
+  late String time;
+  late String distance;
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +89,12 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
           buildFloatingSearchBar(),
+          isSearchedPlaceMarkerClicked
+              ? DistanceAndTime(
+                  isTimeAndDistanceVisible: isTimeAndDistanceVisible,
+                  placeDirections: placeDirections,
+                )
+              : Container(),
         ],
       ),
       floatingActionButton: Container(
@@ -116,10 +133,16 @@ class _MapScreenState extends State<MapScreen> {
       openAxisAlignment: 0,
       width: isPortrait ? 600 : 500,
       debounceDelay: const Duration(milliseconds: 500),
+      progress: progressIndicator,
       onQueryChanged: (query) {
         getPlacesSuggestions(query);
       },
-      onFocusChanged: (_) {},
+      onFocusChanged: (_) {
+        // hide distance & time row
+        setState(() {
+          isTimeAndDistanceVisible = false;
+        });
+      },
       transition: CircularFloatingSearchBarTransition(),
       actions: [
         FloatingSearchBarAction(
@@ -142,6 +165,7 @@ class _MapScreenState extends State<MapScreen> {
             children: [
               buildSuggestionsBloc(),
               buildSelectedPlaceLocationBloc(),
+              buildDirectionsBloc(),
             ],
           ),
         );
@@ -169,6 +193,16 @@ class _MapScreenState extends State<MapScreen> {
       onMapCreated: (GoogleMapController controller) {
         _mapController.complete(controller);
       },
+      polylines: placeDirections != null
+          ? {
+              Polyline(
+                polylineId: const PolylineId('muPolyline'),
+                color: Colors.black,
+                width: 2,
+                points: polylinePoints,
+              ),
+            }
+          : {},
     );
   }
 
@@ -204,6 +238,8 @@ class _MapScreenState extends State<MapScreen> {
               placeSuggestion = places[index];
               controller.close();
               getSelectedPlaceLocation();
+              polylinePoints.clear();
+              removeAllMarkersAndUpdateUI();
             },
             child: PlaceItem(suggestion: places[index]),
           );
@@ -211,7 +247,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void getPlacesSuggestions(String query) {
-    final sessionToken = Uuid().v4();
+    final sessionToken = const Uuid().v4();
     BlocProvider.of<MapsCubit>(context)
         .emitPlaceSuggestions(query, sessionToken);
   }
@@ -229,6 +265,7 @@ class _MapScreenState extends State<MapScreen> {
           selectedPlace = (state).place;
 
           goToMySearchedForLocation();
+          getDirections();
         }
       },
       child: Container(),
@@ -249,9 +286,14 @@ class _MapScreenState extends State<MapScreen> {
       position: goToSearchedForPlace.target,
       onTap: () {
         buildCurrentLocationMarker();
+        // show time & distance
+        setState(() {
+          isSearchedPlaceMarkerClicked = true;
+          isTimeAndDistanceVisible = true;
+        });
       },
       infoWindow: InfoWindow(
-        title: '${placeSuggestion.description}',
+        title: placeSuggestion.description,
       ),
       icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
     );
@@ -274,6 +316,42 @@ class _MapScreenState extends State<MapScreen> {
   void addMarkerToMarkersAndUpdateUI(Marker marker) {
     setState(() {
       markers.add(marker);
+    });
+  }
+
+  Widget buildDirectionsBloc() {
+    return BlocListener<MapsCubit, MapsState>(
+      listener: (context, state) {
+        if (state is DirectionsLoaded) {
+          placeDirections = (state).placeDirections;
+          getPolylinePoints();
+        }
+      },
+      child: Container(),
+    );
+  }
+
+  void getPolylinePoints() {
+    polylinePoints = placeDirections!.polylinePoints
+        .map((e) => LatLng(e.latitude, e.longitude))
+        .toList();
+  }
+
+  void getDirections() {
+    BlocProvider.of<MapsCubit>(context).emitPlaceDirections(
+        LatLng(
+          position!.latitude,
+          position!.longitude,
+        ),
+        LatLng(
+          selectedPlace.result.geometry.location.lat,
+          selectedPlace.result.geometry.location.lng,
+        ));
+  }
+
+  void removeAllMarkersAndUpdateUI() {
+    setState(() {
+      markers.clear();
     });
   }
 }
